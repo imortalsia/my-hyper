@@ -947,25 +947,37 @@ for j=1:nper
 %------2nd, Distribute GDP sequentially
     y1 = zeros(npel,1);                       % Initial income distribution
     if M4==0
-    gain0 = randsrc(npel,1,[1:1:npel; prob1']);       % Probability of labour income
+       % Sample labour income recipients according to prob1.
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;       % Probability of labour income
        for i=1:npel
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + (Y*(1+G)^(j-1))/npel;         
-       end       
+           y1(gain0(i,1),1) = y1(gain0(i,1),1) + (Y*(1+G)^(j-1))/npel;
+       end
     elseif M4==1 && M1==0
-       gain1 = randsrc(npel,1,[1:1:npel; inv_share']); % Probability of capital income
+       % Sample capital income recipients according to investment shares.
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;       % Probability of capital income
        for i=1:npel
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (Y*(1+G)^(j-1))/npel;         
+           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (Y*(1+G)^(j-1))/npel;
        end
     elseif M1==1 && M4==1
        Lpower = gamma;
-       gain0 = randsrc(npel,1,[1:1:npel; prob1']);     % Probability of labour income
+       % Distribute labour income first
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;       % Probability of labour income
        for i=1:npel                        % 1st, distribute labour income
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + Lpower*(Y*(1+G)^(j-1))/npel;         
+           y1(gain0(i,1),1) = y1(gain0(i,1),1) + Lpower*(Y*(1+G)^(j-1))/npel;
        end
-       gain1 = randsrc(npel,1,[1:1:npel; inv_share']); % Probability of capital income
+       % Distribute capital income next
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;       % Probability of capital income
        for i=1:npel                        % 2nd, distribute capital income
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (1.0-Lpower)*(Y*(1+G)^(j-1))/npel;         
-       end       
+           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (1.0-Lpower)*(Y*(1+G)^(j-1))/npel;
+       end
     end
 %------3rd, Calculate income tax burden rate if there is no other taxes
     taxable_y = zeros(npel,1);
