@@ -668,7 +668,12 @@ for j=1:nper
        prob = 0.70*prob1 + 0.30*inv_share;
     end    
 %------1st, distribute incomeby by npel identical shares    
-    gain0 = randsrc(npel,1,[1:npel; prob']); % All the agents have right to have income
+    % Sample recipients according to the discrete distribution in prob.
+    % This replaces the Communications Toolbox function "randsrc" with a
+    % fully vectorized approach that preserves the same probabilities.
+    cumprob = cumsum(prob(:));
+    r = rand(npel,1);
+    gain0 = sum(r > cumprob', 2) + 1;         % All agents have right to income
     y2 = zeros(npel,1);    
     for i=1:npel
         y2(gain0(i,1),1) = y2(gain0(i,1),1)+rest/npel;         
