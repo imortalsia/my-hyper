@@ -1245,29 +1245,29 @@ for j=1:nper
     end
 %------2nd, Distribute the GDP sequentially
     if M4==0
-       gain0 = randsrc(npel,1,[1:npel; prob1']); % Probability of labor income
-       for i=1:npel
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + y1_labor/Lpower/npel;         
-       end       
+       % Sample labour income recipients without Communications Toolbox.
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;
+       y1 = accumarray(gain0, ones(npel,1)*(y1_labor/(Lpower*npel)), [npel,1]);
     elseif M4==1 && M1==0
-       gain1 = randsrc(npel,1,[1:npel; inv_share']); % Probability of capital income
-       for i=1:npel
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + y1_labor/Lpower/npel;         
-       end
+       % Sample capital income recipients according to investment shares.
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;
+       y1 = accumarray(gain1, ones(npel,1)*(y1_labor/(Lpower*npel)), [npel,1]);
     elseif M1==1 && M4==1
-       gain0    = randsrc(npel,1,[1:npel; prob1']);  % Probability of labour income
-       y1_NFA   = WB_other(:,j)*RR_other(j,1);
-       y1_labor = Y*(1+G)^(j-1)*Lpower;   
-       for i=1:npel                         % 1st, distribute labour income
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + y1_labor/npel;         
-       end
-       y1a   = y1 + y1_NFA;                 % 2nd, distribute other returns       
-       gain1 = randsrc(npel,1,[1:npel; inv_share']); % Probability of equity return
-       y1b   = zeros(npel,1);               % 3rd, distribute equity return
-       WB_equity_dist = sum(WB_equity(:,j)*RR_equity,1);       
-       for i=1:npel                         
-           y1b(gain1(i,1),1) = y1b(gain1(i,1),1) + WB_equity_dist/npel;         
-       end  
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;  % Probability of labour income
+       y1 = accumarray(gain0, ones(npel,1)*(y1_labor/npel), [npel,1]);
+       y1_NFA = WB_other(:,j) * RR_other(j,1);
+       y1a = y1 + y1_NFA;                 % 2nd, distribute other returns
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;  % Probability of equity return
+       WB_equity_dist = sum(WB_equity(:,j) * RR_equity, 1);
+       y1b = accumarray(gain1, ones(npel,1)*(WB_equity_dist/npel), [npel,1]);
        y1 = y1a + y1b;
     end
 % ======== New Setting Ends
