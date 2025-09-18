@@ -947,68 +947,54 @@ for j=1:nper
 %------2nd, Distribute GDP sequentially
     y1 = zeros(npel,1);                       % Initial income distribution
     if M4==0
-    gain0 = randsrc(npel,1,[1:1:npel; prob1']);       % Probability of labour income
-       for i=1:npel
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + (Y*(1+G)^(j-1))/npel;         
-       end       
-    elseif M4==1 && M1==0
-       gain1 = randsrc(npel,1,[1:1:npel; inv_share']); % Probability of capital income
-       for i=1:npel
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (Y*(1+G)^(j-1))/npel;         
-       end
-    elseif M1==1 && M4==1
+       % Sample labour income recipients according to prob1.
+   cumprob = cumsum(prob1(:));
+   r = rand(npel,1);
+   gain0 = sum(r > cumprob', 2) + 1;       % Probability of labour income
+   y1 = accumarray(gain0,1,[npel,1]) * ((Y*(1+G)^(j-1))/npel);
+   elseif M4==1 && M1==0
+       % Sample capital income recipients according to investment shares.
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;       % Probability of capital income
+       y1 = accumarray(gain1,1,[npel,1]) * ((Y*(1+G)^(j-1))/npel);
+   elseif M1==1 && M4==1
        Lpower = gamma;
-       gain0 = randsrc(npel,1,[1:1:npel; prob1']);     % Probability of labour income
-       for i=1:npel                        % 1st, distribute labour income
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + Lpower*(Y*(1+G)^(j-1))/npel;         
-       end
-       gain1 = randsrc(npel,1,[1:1:npel; inv_share']); % Probability of capital income
-       for i=1:npel                        % 2nd, distribute capital income
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + (1.0-Lpower)*(Y*(1+G)^(j-1))/npel;         
-       end       
-    end
+       % Distribute labour income first
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;       % Probability of labour income
+       y1 = accumarray(gain0,1,[npel,1]) * (Lpower*(Y*(1+G)^(j-1))/npel);
+       % Distribute capital income next
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;       % Probability of capital income
+       y1 = y1 + accumarray(gain1,1,[npel,1]) * ((1.0-Lpower)*(Y*(1+G)^(j-1))/npel);
+   end
 %------3rd, Calculate income tax burden rate if there is no other taxes
-    taxable_y = zeros(npel,1);
-    for i=1:npel
-        if y1(i,1)>allowance*(Y*(1+G)^(j-1)/npel)
-           taxable_y(i,1) = y1(i,1) - allowance*(Y*(1+G)^(j-1)/npel);                
-        end
-    end
-    clear taxpay_y0;
+    taxable_y = max(y1 - allowance*(Y*(1+G)^(j-1)/npel), 0);
     taxpay_y0 = taxable_y*T;
-    T_burden = sum(taxpay_y0);   
-%=======Case1: Only income tax    
+    T_burden = sum(taxpay_y0);
+%=======Case1: Only income tax
     if Tax_expmt==0
        taxpay_y = taxpay_y0;
        Taxall_y = T_burden;
      % Subsidy to the very poor
-       y2 = zeros(npel,1);          % 1st time transfer
-       for i=1:npel
-           if WB(i,j) + y1(i,1) - taxpay_y(i,1) < C0*(1+G)^(j-1)             
-              y2(i,1) = C0*(1+G)^(j-1);
-           end
-       end
-       num_sub1 = sum(y2(:,1));     % Total amount of the 1st time transfer
+       y2 = C0*(1+G)^(j-1) * (WB(:,j) + y1 - taxpay_y < C0*(1+G)^(j-1));
+       num_sub1 = sum(y2);     % Total amount of the 1st time transfer
        ICM2(:,j) = y1 - taxpay_y;   % Income before transfer
      % Transfer the rest income tax revenue to agents identically
-       y3 = zeros(npel,1);          % 2nd time transfer
-       for i=1:npel
-           if Taxall_y>num_sub1
-              y3(i,1) = (Taxall_y-num_sub1)/npel;              
-           end
+       if Taxall_y>num_sub1
+           y3 = ones(npel,1) * ((Taxall_y-num_sub1)/npel);
+       else
+           y3 = zeros(npel,1);
        end
-       ICM(:,j) = ICM2(:,j) + y2 + y3;               % Income after 2nd transfer       
+       ICM(:,j) = ICM2(:,j) + y2 + y3;               % Income after 2nd transfer
      % Consumption according to "ICM2"
-       for i=1:npel
-           if WB(i,j) + ICM2(i,j) < C0*(1+G)^(j-1) + C1*ICM2(i,j)
-              CSM(i,j) = WB(i,j) + ICM2(i,j);
-           else
-              CSM(i,j) = C0*(1+G)^(j-1) + C1*ICM2(i,j);
-           end
-       end        
+       CSM(:,j) = min(WB(:,j) + ICM2(:,j), C0*(1+G)^(j-1) + C1*ICM2(:,j));
      % Calculate individual wealth after consumption
        WE(:,j) = WB(:,j) + ICM(:,j) - CSM(:,j);
-       TaxRate(j,1) = T;       
+       TaxRate(j,1) = T;
 %=======Case2: Only wealth tax but with same tax burden as income tax 
     elseif Tax_expmt==1       
        TW_multp = 1;       
@@ -1259,29 +1245,29 @@ for j=1:nper
     end
 %------2nd, Distribute the GDP sequentially
     if M4==0
-       gain0 = randsrc(npel,1,[1:npel; prob1']); % Probability of labor income
-       for i=1:npel
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + y1_labor/Lpower/npel;         
-       end       
+       % Sample labour income recipients without Communications Toolbox.
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;
+       y1 = accumarray(gain0, ones(npel,1)*(y1_labor/(Lpower*npel)), [npel,1]);
     elseif M4==1 && M1==0
-       gain1 = randsrc(npel,1,[1:npel; inv_share']); % Probability of capital income
-       for i=1:npel
-           y1(gain1(i,1),1) = y1(gain1(i,1),1) + y1_labor/Lpower/npel;         
-       end
+       % Sample capital income recipients according to investment shares.
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;
+       y1 = accumarray(gain1, ones(npel,1)*(y1_labor/(Lpower*npel)), [npel,1]);
     elseif M1==1 && M4==1
-       gain0    = randsrc(npel,1,[1:npel; prob1']);  % Probability of labour income
-       y1_NFA   = WB_other(:,j)*RR_other(j,1);
-       y1_labor = Y*(1+G)^(j-1)*Lpower;   
-       for i=1:npel                         % 1st, distribute labour income
-           y1(gain0(i,1),1) = y1(gain0(i,1),1) + y1_labor/npel;         
-       end
-       y1a   = y1 + y1_NFA;                 % 2nd, distribute other returns       
-       gain1 = randsrc(npel,1,[1:npel; inv_share']); % Probability of equity return
-       y1b   = zeros(npel,1);               % 3rd, distribute equity return
-       WB_equity_dist = sum(WB_equity(:,j)*RR_equity,1);       
-       for i=1:npel                         
-           y1b(gain1(i,1),1) = y1b(gain1(i,1),1) + WB_equity_dist/npel;         
-       end  
+       cumprob = cumsum(prob1(:));
+       r = rand(npel,1);
+       gain0 = sum(r > cumprob', 2) + 1;  % Probability of labour income
+       y1 = accumarray(gain0, ones(npel,1)*(y1_labor/npel), [npel,1]);
+       y1_NFA = WB_other(:,j) * RR_other(j,1);
+       y1a = y1 + y1_NFA;                 % 2nd, distribute other returns
+       cumprob = cumsum(inv_share(:));
+       r = rand(npel,1);
+       gain1 = sum(r > cumprob', 2) + 1;  % Probability of equity return
+       WB_equity_dist = sum(WB_equity(:,j) * RR_equity, 1);
+       y1b = accumarray(gain1, ones(npel,1)*(WB_equity_dist/npel), [npel,1]);
        y1 = y1a + y1b;
     end
 % ======== New Setting Ends
